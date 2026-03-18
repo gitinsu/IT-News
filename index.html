@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IT PULSE — 실시간 IT 뉴스</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Pretendard:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#050508;--surface:#0d0d14;--card:#111119;--border:#1a1a28;--border-hi:#2a2a40;--accent:#39ff9a;--accent-dim:rgba(57,255,154,0.1);--accent2:#4da6ff;--accent2-dim:rgba(77,166,255,0.08);--warn:#ff9f39;--text:#e2e2f0;--muted:#4a4a6a;--muted2:#2e2e48;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Pretendard',sans-serif;min-height:100vh;overflow-x:hidden;}
+  body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(57,255,154,0.022) 1px,transparent 1px),linear-gradient(90deg,rgba(57,255,154,0.022) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0;}
+  body::after{content:'';position:fixed;top:-180px;left:50%;transform:translateX(-50%);width:700px;height:360px;background:radial-gradient(ellipse,rgba(57,255,154,0.055) 0%,transparent 70%);pointer-events:none;z-index:0;}
+  .wrap{position:relative;z-index:1;max-width:1080px;margin:0 auto;padding:0 24px 80px;}
+
+  header{padding:36px 0 28px;border-bottom:1px solid var(--border);margin-bottom:28px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:20px;}
+  .brand h1{font-family:'DM Mono',monospace;font-size:26px;font-weight:500;color:#fff;letter-spacing:-1px;display:flex;align-items:center;gap:10px;}
+  .brand h1 .tag{font-size:10px;padding:3px 9px;background:var(--accent-dim);color:var(--accent);border:1px solid rgba(57,255,154,0.22);border-radius:4px;letter-spacing:2px;}
+  .brand p{margin-top:5px;font-size:12px;color:var(--muted);}
+  .brand p span{color:var(--accent2);}
+  .upd{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:4px;}
+  .upd b{color:var(--muted2);}
+  .live-pill{display:flex;align-items:center;gap:7px;font-family:'DM Mono',monospace;font-size:11px;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(57,255,154,0.18);border-radius:20px;padding:5px 13px;}
+  .dot{width:7px;height:7px;background:var(--accent);border-radius:50%;animation:blink 1.4s infinite;}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  .controls{display:flex;align-items:center;gap:10px;margin-bottom:22px;flex-wrap:wrap;}
+  .btn-fetch{display:flex;align-items:center;gap:8px;padding:11px 22px;background:var(--accent);color:#000;border:none;border-radius:7px;font-family:'DM Mono',monospace;font-size:12px;font-weight:500;cursor:pointer;transition:all .18s;white-space:nowrap;}
+  .btn-fetch:hover:not(:disabled){background:#5fffb0;transform:translateY(-1px);box-shadow:0 6px 22px rgba(57,255,154,0.18);}
+  .btn-fetch:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+  .btn-fetch .ico{display:inline-block;}
+  .btn-fetch.spin .ico{animation:spin .7s linear infinite;}
+  .auto-lbl{display:flex;align-items:center;gap:8px;padding:11px 16px;border:1px solid var(--border-hi);border-radius:7px;font-size:12px;color:var(--muted);cursor:pointer;transition:all .18s;user-select:none;white-space:nowrap;}
+  .auto-lbl:hover{border-color:var(--accent);color:var(--text);}
+  .auto-lbl.on{border-color:var(--accent);color:var(--accent);}
+  .tog{width:30px;height:16px;border-radius:8px;background:var(--muted2);position:relative;transition:background .2s;}
+  .tog::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;background:var(--muted);border-radius:50%;transition:all .2s;}
+  .auto-lbl.on .tog{background:rgba(57,255,154,0.18);}
+  .auto-lbl.on .tog::after{left:16px;background:var(--accent);}
+  .interval{background:var(--surface);border:1px solid var(--border-hi);color:var(--text);padding:11px 13px;border-radius:7px;font-family:'DM Mono',monospace;font-size:12px;cursor:pointer;outline:none;}
+  .counter{margin-left:auto;font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);}
+  .counter strong{font-size:22px;color:var(--accent);margin-right:3px;}
+
+  .cats{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:24px;}
+  .cat{padding:5px 13px;border-radius:20px;border:1px solid var(--border-hi);font-size:11px;font-family:'DM Mono',monospace;cursor:pointer;color:var(--muted);transition:all .15s;letter-spacing:.5px;}
+  .cat:hover,.cat.on{border-color:var(--accent2);color:var(--accent2);background:var(--accent2-dim);}
+
+  #status{display:flex;align-items:center;gap:10px;padding:13px 17px;border-radius:8px;font-size:13px;margin-bottom:18px;border:1px solid transparent;}
+  #status.hide{display:none;}
+  #status.loading{background:rgba(77,166,255,.06);border-color:rgba(77,166,255,.2);color:var(--accent2);}
+  #status.ok{background:rgba(57,255,154,.05);border-color:rgba(57,255,154,.2);color:var(--accent);}
+  #status.err{background:rgba(255,80,80,.06);border-color:rgba(255,80,80,.2);color:#ff6060;}
+  .spin-sm{width:14px;height:14px;flex-shrink:0;border:2px solid rgba(77,166,255,.2);border-top-color:var(--accent2);border-radius:50%;animation:spin .7s linear infinite;}
+
+  .prog{height:2px;background:var(--border);border-radius:1px;margin-bottom:20px;overflow:hidden;display:none;}
+  .prog.show{display:block;}
+  .prog-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .3s;width:0;}
+
+  .sec-label{display:flex;align-items:center;gap:8px;font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;padding:6px 0 10px;border-bottom:1px solid var(--border);margin-bottom:14px;}
+  .sec-label em{font-style:normal;color:var(--accent);margin-left:3px;}
+  .sec-label.hist{margin-top:36px;color:var(--muted2);}
+  .sec-label.hist em{color:var(--accent2);}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:13px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:19px;position:relative;overflow:hidden;transition:all .22s;animation:fadeUp .4s ease both;cursor:pointer;text-decoration:none;display:block;color:inherit;}
+  .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));opacity:0;transition:opacity .2s;}
+  .card:hover{border-color:rgba(57,255,154,.18);transform:translateY(-2px);box-shadow:0 10px 32px rgba(0,0,0,.4);}
+  .card:hover::before{opacity:1;}
+  .card.new-item{border-color:rgba(57,255,154,.35);}
+  .card.hist-item{opacity:.62;}
+  .card.hist-item:hover{opacity:1;}
+
+  .card-head{display:flex;align-items:center;gap:7px;margin-bottom:10px;flex-wrap:wrap;}
+  .badge{font-family:'DM Mono',monospace;font-size:10px;padding:2px 8px;border-radius:3px;letter-spacing:.8px;}
+  .b-ai{background:rgba(57,255,154,.1);color:var(--accent);border:1px solid rgba(57,255,154,.2);}
+  .b-semi{background:rgba(77,166,255,.1);color:var(--accent2);border:1px solid rgba(77,166,255,.2);}
+  .b-big{background:rgba(255,159,57,.1);color:var(--warn);border:1px solid rgba(255,159,57,.2);}
+  .b-game{background:rgba(180,100,255,.1);color:#c87fff;border:1px solid rgba(180,100,255,.2);}
+  .b-robo{background:rgba(57,220,255,.1);color:#39dcff;border:1px solid rgba(57,220,255,.2);}
+  .b-fin{background:rgba(255,80,120,.1);color:#ff7090;border:1px solid rgba(255,80,120,.2);}
+  .b-etc{background:rgba(100,100,140,.1);color:var(--muted);border:1px solid rgba(100,100,140,.2);}
+  .new-badge{font-family:'DM Mono',monospace;font-size:9px;background:var(--accent);color:#000;padding:2px 6px;border-radius:3px;font-weight:500;letter-spacing:1px;}
+  .hist-badge{font-family:'DM Mono',monospace;font-size:9px;background:var(--accent2-dim);color:var(--accent2);border:1px solid rgba(77,166,255,.2);padding:2px 6px;border-radius:3px;}
+  .card-time{margin-left:auto;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);}
+  .card-title{font-size:14px;font-weight:500;line-height:1.6;color:var(--text);margin-bottom:9px;}
+  .card:hover .card-title{color:#fff;}
+  .card-foot{display:flex;align-items:center;justify-content:space-between;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);border-top:1px solid var(--border);padding-top:9px;}
+  .card-foot .src{color:var(--muted2);}
+  .card-foot .lnk{color:var(--accent2);}
+
+  .empty{text-align:center;padding:80px 20px;color:var(--muted);}
+  .empty .ico{font-size:48px;opacity:.35;margin-bottom:16px;}
+  .empty p{font-size:14px;line-height:2;}
+
+  footer{margin-top:56px;padding-top:22px;border-top:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);line-height:1.9;}
+  footer span{color:var(--accent);}
+  footer a{color:var(--accent2);text-decoration:none;}
+
+  @media(max-width:600px){header{flex-direction:column;}.controls{gap:8px;}.counter{margin-left:0;width:100%;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1>IT PULSE <span class="tag">LIVE</span></h1>
+      <p><span>kr.investing.com</span> 실시간 IT/테크 뉴스 · API 키 불필요</p>
+      <div class="upd">마지막 업데이트: <b id="upd-time">—</b></div>
+    </div>
+    <div class="live-pill"><div class="dot"></div>REAL-TIME</div>
+  </header>
+
+  <div class="controls">
+    <button class="btn-fetch" id="btn-fetch" onclick="fetchNews()">
+      <span class="ico">⟳</span> 뉴스 가져오기
+    </button>
+    <label class="auto-lbl" id="auto-lbl" onclick="toggleAuto()">
+      <div class="tog"></div>자동 새로고침
+    </label>
+    <select class="interval" id="interval" onchange="updateInterval()">
+      <option value="60">1분마다</option>
+      <option value="180">3분마다</option>
+      <option value="300" selected>5분마다</option>
+      <option value="600">10분마다</option>
+    </select>
+    <div class="counter"><strong id="news-count">0</strong>건의 IT 뉴스</div>
+  </div>
+
+  <div class="cats">
+    <div class="cat on" data-cat="전체"          onclick="filterCat(this)">전체</div>
+    <div class="cat"    data-cat="AI·인공지능"    onclick="filterCat(this)">🤖 AI</div>
+    <div class="cat"    data-cat="반도체·하드웨어" onclick="filterCat(this)">🔧 반도체</div>
+    <div class="cat"    data-cat="빅테크·플랫폼"  onclick="filterCat(this)">🏢 빅테크</div>
+    <div class="cat"    data-cat="게임·엔터"      onclick="filterCat(this)">🎮 게임</div>
+    <div class="cat"    data-cat="로봇·모빌리티"  onclick="filterCat(this)">🦾 로봇</div>
+    <div class="cat"    data-cat="핀테크·IT금융"  onclick="filterCat(this)">💳 핀테크</div>
+  </div>
+
+  <div class="prog" id="prog"><div class="prog-fill" id="prog-fill"></div></div>
+  <div id="status" class="hide"></div>
+
+  <div id="output">
+    <div class="empty">
+      <div class="ico">📡</div>
+      <p><strong>뉴스 가져오기</strong>를 클릭하세요!<br>
+      API 키 없이 바로 IT 뉴스를 불러와요 😊</p>
+    </div>
+  </div>
+
+  <footer>
+    Powered by <span>Netlify Functions</span> · 소스: <a href="https://kr.investing.com/news/stock-market-news" target="_blank">kr.investing.com</a><br>
+    IT/테크 뉴스만 자동 필터링 · 완전 무료 · API 키 불필요
+  </footer>
+</div>
+
+<script>
+let currentNews=[], historyNews=[], seenTitles=new Set();
+let currentCat='전체', autoTimer=null, isAuto=false, progTimer=null;
+
+function setStatus(type,msg){const el=document.getElementById('status');el.className=type;el.innerHTML=type==='loading'?`<div class="spin-sm"></div><span>${msg}</span>`:`<span>${msg}</span>`;}
+function hideStatus(){document.getElementById('status').className='hide';}
+
+function startProg(){document.getElementById('prog').classList.add('show');document.getElementById('prog-fill').style.width='0%';let p=0;clearInterval(progTimer);progTimer=setInterval(()=>{p+=Math.random()*15;if(p>90)p=90;document.getElementById('prog-fill').style.width=p+'%';},300);}
+function endProg(){clearInterval(progTimer);document.getElementById('prog-fill').style.width='100%';setTimeout(()=>{document.getElementById('prog').classList.remove('show');document.getElementById('prog-fill').style.width='0%';},400);}
+
+function badgeCls(cat){return({'AI·인공지능':'b-ai','반도체·하드웨어':'b-semi','빅테크·플랫폼':'b-big','게임·엔터':'b-game','로봇·모빌리티':'b-robo','핀테크·IT금융':'b-fin'}[cat]||'b-etc');}
+
+function makeCard(item,i,isNew,isHist){
+  return `<a class="card${isNew?' new-item':''}${isHist?' hist-item':''}" href="${item.url}" target="_blank" rel="noopener" style="animation-delay:${i*0.05}s">
+    <div class="card-head">
+      <span class="badge ${badgeCls(item.category)}">${item.category}</span>
+      ${isNew?'<span class="new-badge">NEW</span>':''}
+      ${isHist?'<span class="hist-badge">기록</span>':''}
+    </div>
+    <div class="card-title">${item.title}</div>
+    <div class="card-foot"><span class="src">${item.source||'Investing.com'}</span><span class="lnk">원문 보기 →</span></div>
+  </a>`;
+}
+
+function renderAll(){
+  const fn=a=>currentCat==='전체'||a.category===currentCat;
+  const live=currentNews.filter(fn), hist=historyNews.filter(fn);
+  document.getElementById('news-count').textContent=live.length;
+  if(!live.length&&!hist.length){document.getElementById('output').innerHTML=`<div class="empty"><div class="ico">🔍</div><p>해당 카테고리 IT 뉴스가 없습니다.</p></div>`;return;}
+  let html='';
+  if(live.length){html+=`<div class="sec-label"><div class="dot" style="width:7px;height:7px;background:var(--accent);border-radius:50%;flex-shrink:0;animation:blink 1.4s infinite"></div>실시간 뉴스<em>${live.length}건</em></div><div class="cards">${live.map((a,i)=>makeCard(a,i,!seenTitles.has(a.url),false)).join('')}</div>`;}
+  if(hist.length){html+=`<div class="sec-label hist">🕐 최근 기록<em>${hist.length}건</em></div><div class="cards">${hist.map((a,i)=>makeCard(a,i,false,true)).join('')}</div>`;}
+  document.getElementById('output').innerHTML=html;
+}
+
+async function fetchNews(){
+  const btn=document.getElementById('btn-fetch');
+  btn.disabled=true; btn.classList.add('spin');
+  setStatus('loading','kr.investing.com에서 IT 뉴스 가져오는 중...');
+  startProg();
+
+  try{
+    const res = await fetch('/.netlify/functions/news');
+    if(!res.ok) throw new Error('서버 오류: '+res.status);
+    const data = await res.json();
+
+    if(currentNews.length){
+      historyNews=[...currentNews,...historyNews].filter((a,i,arr)=>arr.findIndex(b=>b.url===a.url)===i).slice(0,10);
+      currentNews.forEach(a=>seenTitles.add(a.url));
+    }
+
+    currentNews = data.articles || [];
+    renderAll();
+
+    document.getElementById('upd-time').textContent=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    endProg();
+    setStatus('ok',`✓ IT 뉴스 ${currentNews.length}건 수신 완료!`);
+    setTimeout(hideStatus,3000);
+
+  }catch(e){
+    endProg();
+    console.error(e);
+    setStatus('err','오류: '+e.message);
+  }
+
+  btn.disabled=false; btn.classList.remove('spin');
+}
+
+function toggleAuto(){
+  isAuto=!isAuto;
+  document.getElementById('auto-lbl').classList.toggle('on',isAuto);
+  if(isAuto){autoTimer=setInterval(fetchNews,+document.getElementById('interval').value*1000);}
+  else clearInterval(autoTimer);
+}
+
+function updateInterval(){
+  if(!isAuto)return;
+  clearInterval(autoTimer);
+  autoTimer=setInterval(fetchNews,+document.getElementById('interval').value*1000);
+}
+
+function filterCat(el){
+  document.querySelectorAll('.cat').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on'); currentCat=el.dataset.cat;
+  renderAll();
+}
+
+// 페이지 로드 시 자동 실행
+window.addEventListener('load', ()=>setTimeout(fetchNews,500));
+</script>
+</body>
+</html>
