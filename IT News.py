@@ -24,14 +24,12 @@ st.markdown("""
     color: gray;
 }
 
-/* 상승 빨강 */
 .up {
     color: #ff4d4f;
     font-weight: bold;
     animation: blink 1s infinite;
 }
 
-/* 하락 파랑 */
 .down {
     color: #4da6ff;
     font-weight: bold;
@@ -63,7 +61,46 @@ def time_ago(pub_date):
         return ""
 
 
-# 🔥 지수 가져오기 (수정된 안정 버전)
+# 🔥 1️⃣ Yahoo (1차)
+def fetch_yahoo(symbol):
+    headers = {"User-Agent": "Mozilla/5.0"}
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=2d"
+
+    res = requests.get(url, headers=headers).json()
+
+    result = res.get("chart", {}).get("result")
+
+    if not result:
+        return None
+
+    closes = result[0]["indicators"]["quote"][0]["close"]
+    closes = [c for c in closes if c is not None]
+
+    if len(closes) < 2:
+        return None
+
+    prev = closes[-2]
+    current = closes[-1]
+
+    return ((current - prev) / prev) * 100
+
+
+# 🔥 2️⃣ 대체 API (fallback)
+def fetch_alt():
+    try:
+        url = "https://financialmodelingprep.com/api/v3/quote/%5EGSPC,^RUT"
+        res = requests.get(url).json()
+
+        data = {}
+        for item in res:
+            data[item["symbol"]] = item["changesPercentage"]
+
+        return data
+    except:
+        return {}
+
+
+# 🔥 지수 가져오기 (최종)
 def fetch_indices():
     symbols = {
         "KOSPI": "^KS11",
@@ -75,29 +112,12 @@ def fetch_indices():
     results = {}
 
     for name, symbol in symbols.items():
-        try:
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
-            res = requests.get(url).json()
+        val = fetch_yahoo(symbol)
 
-            result = res["chart"]["result"][0]
-
-            closes = result["indicators"]["quote"][0]["close"]
-            closes = [c for c in closes if c is not None]
-
-            if len(closes) < 2:
-                results[name] = 0
-                continue
-
-            current = closes[-1]
-            prev = closes[-2]
-
-            change_pct = ((current - prev) / prev) * 100
-
-            results[name] = change_pct
-
-        except Exception as e:
-            print(e)
+        if val is None:
             results[name] = 0
+        else:
+            results[name] = val
 
     return results
 
@@ -164,7 +184,7 @@ def fetch_news():
     return all_articles
 
 
-# 🔥 사이드바 지수
+# 🔥 사이드바
 st.sidebar.title("📊 주요 지수")
 
 indices = fetch_indices()
@@ -177,7 +197,7 @@ for name, val in indices.items():
     )
 
 
-# 🔥 메인 UI
+# 🔥 메인
 st.title("📰 IT PULSE")
 
 col1, col2 = st.columns([1,1])
