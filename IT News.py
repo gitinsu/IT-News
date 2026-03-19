@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 st.set_page_config(page_title="IT PULSE", layout="wide")
 
-# 🎨 스타일
+# 🔥 스타일 (깜빡임 + 색상)
 st.markdown("""
 <style>
 .card {
@@ -23,11 +23,29 @@ st.markdown("""
     font-size: 11px;
     color: gray;
 }
+
+/* 상승 빨강 */
+.up {
+    color: #ff4d4f;
+    font-weight: bold;
+    animation: blink 1s infinite;
+}
+
+/* 하락 파랑 */
+.down {
+    color: #4da6ff;
+    font-weight: bold;
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    50% { opacity: 0.3; }
+}
 </style>
 """, unsafe_allow_html=True)
 
 
-# 🔥 시간 변환 (몇분 전)
+# 🔥 시간 표시
 def time_ago(pub_date):
     try:
         dt = datetime.strptime(pub_date, "%a, %d %b %Y %H:%M:%S %z")
@@ -41,34 +59,52 @@ def time_ago(pub_date):
         elif minutes < 60:
             return f"{minutes}분 전"
         else:
-            hours = minutes // 60
-            return f"{hours}시간 전"
+            return f"{minutes//60}시간 전"
     except:
         return ""
 
 
-# 🔥 카테고리 분류
+# 🔥 지수 가져오기 (Yahoo)
+def fetch_indices():
+    symbols = {
+        "KOSPI": "^KS11",
+        "KOSDAQ": "^KQ11",
+        "S&P500": "^GSPC",
+        "RUSSELL": "^RUT"
+    }
+
+    results = {}
+
+    for name, symbol in symbols.items():
+        try:
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+            res = requests.get(url).json()
+
+            data = res["chart"]["result"][0]["meta"]
+
+            current = data["regularMarketPrice"]
+            prev = data["chartPreviousClose"]
+
+            change_pct = ((current - prev) / prev) * 100
+
+            results[name] = change_pct
+        except:
+            results[name] = 0
+
+    return results
+
+
+# 🔥 뉴스 카테고리
 def detect_cat(title):
     t = title.lower()
 
-    # AI (반도체 포함)
-    if re.search(r"""
-        ai|gpt|llm|인공지능|딥러닝|머신러닝|
-        반도체|hbm|dram|낸드|칩|파운드리|
-        엔비디아|amd|인텔|tsmc|하이닉스
-    """, t, re.VERBOSE):
+    if re.search(r"ai|gpt|llm|인공지능|반도체|hbm|dram|칩|엔비디아|amd|인텔|하이닉스", t):
         return "AI"
 
-    # 암호화폐
     if re.search(r"비트코인|이더리움|코인|암호화폐|블록체인", t):
         return "암호화폐"
 
-    # 증시
-    if re.search(r"""
-        증시|주식|코스피|코스닥|환율|경제|
-        골드만삭스|나스닥|다우|s&p|
-        급등|시장|금리|연준
-    """, t, re.VERBOSE):
+    if re.search(r"코스피|코스닥|환율|경제|나스닥|다우|s&p|시장|금리|급등", t):
         return "증시"
 
     return "기타"
@@ -120,9 +156,21 @@ def fetch_news():
     return all_articles
 
 
-# 🔥 UI
+# 🔥 사이드바 지수 표시
+st.sidebar.title("📊 주요 지수")
+
+indices = fetch_indices()
+
+for name, val in indices.items():
+    cls = "up" if val >= 0 else "down"
+    st.sidebar.markdown(
+        f"<div class='{cls}'>{name} {val:.2f}%</div>",
+        unsafe_allow_html=True
+    )
+
+
+# 🔥 메인 UI
 st.title("📰 IT PULSE")
-st.caption("실시간 IT 뉴스 (RSS 기반)")
 
 col1, col2 = st.columns([1,1])
 
