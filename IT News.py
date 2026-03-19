@@ -28,41 +28,37 @@ def time_ago(pub_date):
     except:
         return ""
 
-# 🔥 안정 환율 API (무조건 됨)
-def fetch_usd():
+# 🔥 🔥 핵심: Daum API
+def fetch_daum_market():
     try:
-        res = requests.get("https://open.er-api.com/v6/latest/USD").json()
-        rate = res["rates"]["KRW"]
-        return rate
-    except:
-        return 0
+        url = "https://finance.daum.net/api/market_index"
 
-# 🔥 한국 지수 (Yahoo ETF로 우회 - 핵심)
-def fetch_korea_index():
-    try:
-        headers = {"User-Agent": "Mozilla/5.0"}
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Referer": "https://finance.daum.net/domestic"
+        }
 
-        # 코스피 ETF (TIGER 200)
-        kospi_url = "https://query1.finance.yahoo.com/v8/finance/chart/069500.KS?interval=1d&range=2d"
-        kospi_res = requests.get(kospi_url, headers=headers).json()
+        res = requests.get(url, headers=headers).json()
 
-        kospi_close = kospi_res["chart"]["result"][0]["indicators"]["quote"][0]["close"]
-        kospi_close = [c for c in kospi_close if c]
-        kospi = ((kospi_close[-1]-kospi_close[-2])/kospi_close[-2])*100
+        kospi = kosdaq = usd = 0
 
-        # 코스닥 ETF (KODEX KOSDAQ150)
-        kosdaq_url = "https://query1.finance.yahoo.com/v8/finance/chart/229200.KQ?interval=1d&range=2d"
-        kosdaq_res = requests.get(kosdaq_url, headers=headers).json()
+        for item in res["data"]:
+            name = item["name"]
 
-        kosdaq_close = kosdaq_res["chart"]["result"][0]["indicators"]["quote"][0]["close"]
-        kosdaq_close = [c for c in kosdaq_close if c]
-        kosdaq = ((kosdaq_close[-1]-kosdaq_close[-2])/kosdaq_close[-2])*100
+            if name == "코스피":
+                kospi = float(item["changeRate"])
 
-        return kospi, kosdaq
+            elif name == "코스닥":
+                kosdaq = float(item["changeRate"])
+
+            elif "USD/KRW" in name:
+                usd = float(item["tradePrice"])
+
+        return kospi, kosdaq, usd
 
     except Exception as e:
-        print("ETF 오류:", e)
-        return 0, 0
+        print("Daum 오류:", e)
+        return 0, 0, 0
 
 # 🔥 해외 지수
 def fetch_global(symbol):
@@ -79,8 +75,7 @@ def fetch_global(symbol):
 
 # 🔥 지수 통합
 def fetch_indices():
-    kospi, kosdaq = fetch_korea_index()
-    usd = fetch_usd()
+    kospi, kosdaq, usd = fetch_daum_market()
 
     return {
         "KOSPI": kospi,
@@ -150,7 +145,10 @@ indices = fetch_indices()
 
 for k,v in indices.items():
     if k == "USD/KRW":
-        st.sidebar.markdown(f"<div class='meta'>{k} {v:.2f}</div>", unsafe_allow_html=True)
+        st.sidebar.markdown(
+            f"<div class='meta'>{k} {v:,.2f}</div>",
+            unsafe_allow_html=True
+        )
     else:
         cls="up" if v>=0 else "down"
         st.sidebar.markdown(
@@ -158,7 +156,7 @@ for k,v in indices.items():
             unsafe_allow_html=True
         )
 
-# 🔥 메인
+# 🔥 메인 UI
 st.title("📰 IT PULSE")
 
 col1,col2=st.columns([1,1])
@@ -170,12 +168,14 @@ with col2:
     if st.button("🔄 새로고침"):
         st.session_state["r"]=True
 
+# 🔥 데이터 로드
 if "data" not in st.session_state or st.session_state.get("r"):
     st.session_state["data"]=fetch_news()
     st.session_state["r"]=False
 
 data=st.session_state["data"]
 
+# 🔥 탭
 tab1,tab2,tab3=st.tabs(["전체","AI","증시"])
 
 def render(cat=None):
