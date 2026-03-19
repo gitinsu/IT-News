@@ -28,25 +28,33 @@ def time_ago(pub_date):
     except:
         return ""
 
-# 🔥 한국 지수 (CSV - 절대 안막힘)
+# 🔥 🇰🇷 한국 지수 + 환율 (정확 파싱)
 def fetch_korea_index():
-    try:
-        url = "https://finance.naver.com/sise/sise_index.naver"
-        html = requests.get(url, headers={"User-Agent":"Mozilla/5.0"}).text
+    headers = {"User-Agent": "Mozilla/5.0"}
 
-        def extract(name):
-            pattern = rf"{name}.*?([-+]?\d+\.\d+)%"
+    try:
+        html = requests.get("https://finance.naver.com/sise/", headers=headers).text
+
+        def extract(label):
+            pattern = rf"{label}.*?class=\"num\">([\d,]+\.\d+).*?class=\"tah p11.*?\">([-+]?\d+\.\d+)%"
             m = re.search(pattern, html, re.DOTALL)
-            return float(m.group(1)) if m else 0
+            return float(m.group(2)) if m else 0
 
         kospi = extract("KOSPI")
         kosdaq = extract("KOSDAQ")
 
-        return kospi, kosdaq
-    except:
-        return 0, 0
+        # 🔥 환율
+        usd_pattern = r"미국 USD.*?class=\"num\">([\d,]+\.\d+).*?class=\"tah p11.*?\">([-+]?\d+\.\d+)%"
+        usd_match = re.search(usd_pattern, html, re.DOTALL)
+        usd = float(usd_match.group(2)) if usd_match else 0
 
-# 🔥 해외 지수 (Yahoo 안정)
+        return kospi, kosdaq, usd
+
+    except Exception as e:
+        print("네이버 오류:", e)
+        return 0, 0, 0
+
+# 🔥 🌍 해외 지수
 def fetch_global(symbol):
     try:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=2d"
@@ -59,12 +67,13 @@ def fetch_global(symbol):
     except:
         return 0
 
-# 🔥 통합
+# 🔥 지수 통합
 def fetch_indices():
-    kospi, kosdaq = fetch_korea_index()
+    kospi, kosdaq, usd = fetch_korea_index()
     return {
         "KOSPI": kospi,
         "KOSDAQ": kosdaq,
+        "USD/KRW": usd,
         "S&P500": fetch_global("^GSPC"),
         "RUSSELL": fetch_global("^RUT")
     }
@@ -74,7 +83,7 @@ def detect_cat(t):
     t=t.lower()
     if re.search(r"ai|gpt|llm|반도체|칩|엔비디아|하이닉스", t): return "AI"
     if re.search(r"비트코인|코인|암호화폐", t): return "암호화폐"
-    if re.search(r"코스피|환율|경제|나스닥|금리|시장", t): return "증시"
+    if re.search(r"코스피|코스닥|환율|경제|나스닥|금리|시장", t): return "증시"
     return "기타"
 
 # 🔥 뉴스
@@ -106,20 +115,25 @@ def fetch_news():
             if len(data)>=60: break
     return data
 
-# 🔥 사이드바
+# 🔥 사이드바 지수
 st.sidebar.title("📊 주요 지수")
 indices=fetch_indices()
 
 for k,v in indices.items():
     cls="up" if v>=0 else "down"
-    st.sidebar.markdown(f"<div class='{cls}'>{k} {v:.2f}%</div>", unsafe_allow_html=True)
+    st.sidebar.markdown(
+        f"<div class='{cls}'>{k} {v:.2f}%</div>",
+        unsafe_allow_html=True
+    )
 
 # 🔥 메인
 st.title("📰 IT PULSE")
 
 col1,col2=st.columns([1,1])
+
 with col1:
     refresh=st.selectbox("자동 새로고침",["없음","1분","3분","5분"])
+
 with col2:
     if st.button("🔄 새로고침"):
         st.session_state["r"]=True
@@ -146,6 +160,7 @@ with tab1: render()
 with tab2: render("AI")
 with tab3: render("증시")
 
+# 🔥 자동 새로고침
 if refresh!="없음":
     time.sleep({"1분":60,"3분":180,"5분":300}[refresh])
     st.rerun()
