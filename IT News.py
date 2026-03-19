@@ -24,53 +24,62 @@ def time_ago(pub_date):
         dt = datetime.strptime(pub_date, "%a, %d %b %Y %H:%M:%S %z")
         diff = datetime.now(timezone.utc) - dt
         m = int(diff.total_seconds()/60)
-        return "방금 전" if m < 1 else f"{m}분 전" if m < 60 else f"{m//60}시간 전"
+        return "방금 전" if m<1 else f"{m}분 전" if m<60 else f"{m//60}시간 전"
     except:
         return ""
 
-# 🔥 Yahoo quote API
-def fetch_quote(symbol):
-    try:
-        url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbol}"
-        res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
-        data = res.get("quoteResponse", {}).get("result", [])
-        if not data:
-            return 0
-        return data[0].get("regularMarketChangePercent", 0)
-    except:
-        return 0
-
-# 🔥 한국 지수
+# 🔥 한국 지수 (chart API - 안정)
 def fetch_korea_index():
-    return fetch_quote("^KS11"), fetch_quote("^KQ11")
-
-# 🔥 미국 지수 (안정)
-def fetch_us_index():
     try:
-        url = "https://query1.finance.yahoo.com/v7/finance/quote?symbols=^GSPC,^RUT"
-        res = requests.get(url, headers={"User-Agent":"Mozilla/5.0"}, timeout=5).json()
-        data = res.get("quoteResponse", {}).get("result", [])
+        headers = {"User-Agent":"Mozilla/5.0"}
 
-        sp = russell = 0
-        for item in data:
-            if item.get("symbol") == "^GSPC":
-                sp = item.get("regularMarketChangePercent", 0)
-            elif item.get("symbol") == "^RUT":
-                russell = item.get("regularMarketChangePercent", 0)
+        def get(symbol):
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=5d&interval=1d"
+            res = requests.get(url, headers=headers).json()
 
-        return sp, russell
+            closes = res["chart"]["result"][0]["indicators"]["quote"][0]["close"]
+            closes = [c for c in closes if c]
+
+            if len(closes) < 2:
+                return 0
+
+            return ((closes[-1] - closes[-2]) / closes[-2]) * 100
+
+        return get("^KS11"), get("^KQ11")
+
     except:
         return 0, 0
 
-# 🔥 환율 (그대로 유지)
+# 🔥 미국 지수 (quote API)
+def fetch_us_index():
+    try:
+        url = "https://query1.finance.yahoo.com/v7/finance/quote?symbols=^GSPC,^RUT"
+        res = requests.get(url, headers={"User-Agent":"Mozilla/5.0"}).json()
+
+        data = res["quoteResponse"]["result"]
+
+        sp = russell = 0
+
+        for i in data:
+            if i["symbol"] == "^GSPC":
+                sp = i.get("regularMarketChangePercent", 0)
+            elif i["symbol"] == "^RUT":
+                russell = i.get("regularMarketChangePercent", 0)
+
+        return sp, russell
+
+    except:
+        return 0, 0
+
+# 🔥 환율 (유지)
 def fetch_usd():
     try:
-        res = requests.get("https://open.er-api.com/v6/latest/USD", timeout=5).json()
+        res = requests.get("https://open.er-api.com/v6/latest/USD").json()
         return res["rates"]["KRW"]
     except:
         return 0
 
-# 🔥 지수 통합
+# 🔥 통합
 def fetch_indices():
     kospi, kosdaq = fetch_korea_index()
     sp, russell = fetch_us_index()
@@ -83,17 +92,6 @@ def fetch_indices():
         "S&P500": sp,
         "RUSSELL": russell
     }
-
-# 🔥 카테고리
-def detect_cat(title):
-    t = title.lower()
-    if re.search(r"ai|gpt|llm|반도체|칩|엔비디아|하이닉스", t):
-        return "AI"
-    if re.search(r"비트코인|코인|암호화폐", t):
-        return "암호화폐"
-    if re.search(r"코스피|코스닥|환율|경제|나스닥|금리|시장", t):
-        return "증시"
-    return "기타"
 
 # 🔥 뉴스
 def fetch_news():
@@ -127,70 +125,26 @@ def fetch_news():
             data.append({
                 "title": title,
                 "url": link,
-                "category": detect_cat(title),
                 "time": time_ago(d.group(1) if d else "")
             })
 
-            if len(data) >= 60:
-                break
-
     return data
 
-# 🔥 사이드바
+# 🔥 UI
 st.sidebar.title("📊 주요 지수")
 
 indices = fetch_indices()
 
-for k, v in indices.items():
+for k,v in indices.items():
     if k == "USD/KRW":
-        st.sidebar.markdown(f"<div class='meta'>{k} {v:,.2f}</div>", unsafe_allow_html=True)
+        st.sidebar.write(f"{k}: {v:,.2f}")
     else:
-        cls = "up" if v >= 0 else "down"
-        st.sidebar.markdown(f"<div class='{cls}'>{k} {v:.2f}%</div>", unsafe_allow_html=True)
+        color = "🔴" if v >= 0 else "🔵"
+        st.sidebar.write(f"{color} {k}: {v:.2f}%")
 
-# 🔥 메인 UI
 st.title("📰 IT PULSE")
 
-col1, col2 = st.columns([1,1])
+data = fetch_news()
 
-with col1:
-    refresh = st.selectbox("자동 새로고침", ["없음", "1분", "3분", "5분"])
-
-with col2:
-    if st.button("🔄 새로고침"):
-        st.session_state["r"] = True
-
-if "data" not in st.session_state or st.session_state.get("r"):
-    st.session_state["data"] = fetch_news()
-    st.session_state["r"] = False
-
-data = st.session_state["data"]
-
-# 🔥 탭
-tab1, tab2, tab3 = st.tabs(["전체", "AI", "증시"])
-
-def render(cat=None):
-    for a in data:
-        if cat and a["category"] != cat:
-            continue
-
-        st.markdown(f"""
-        <div class="card">
-        <div class="title"><a href="{a['url']}" target="_blank">{a['title']}</a></div>
-        <div class="meta">{a['category']} · {a['time']}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-with tab1:
-    render()
-
-with tab2:
-    render("AI")
-
-with tab3:
-    render("증시")
-
-# 🔥 자동 새로고침
-if refresh != "없음":
-    time.sleep({"1분":60, "3분":180, "5분":300}[refresh])
-    st.rerun()
+for a in data[:20]:
+    st.markdown(f"**[{a['title']}]({a['url']})**  \n{a['time']}")
