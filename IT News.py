@@ -149,30 +149,33 @@ def fetch_indices():
         "USD/KRW": ("fx",   usd,          None),
     }
 
-# ── 카테고리 ──────────────────────────────────────────────────────────
-def detect_cat(title):
+# ── 카테고리 (복수 반환 - 중복 허용) ────────────────────────────────
+def detect_cats(title):
     t = title.lower()
+    cats = []
 
-    # AI·반도체: AI 기술 + 반도체 기업
     if re.search(r"ai|gpt|llm|인공지능|반도체|엔비디아|nvidia|amd|인텔|intel|tsmc|hbm|낸드|dram|칩|파운드리|챗봇|딥러닝|gtc|머신러닝|생성형", t):
-        return "AI·반도체"
+        cats.append("AI·반도체")
 
-    # 빅테크: 국내 TOP5 + 해외 M7
     if re.search(
-        r"삼성전자|sk하이닉스|하이닉스|현대차|lg전자|카카오|네이버|"  # 국내 TOP5
-        r"애플|apple|구글|google|메타|meta|아마존|amazon|마이크로소프트|microsoft|ms|"  # 해외 M7
+        r"삼성전자|sk하이닉스|하이닉스|현대차|lg전자|카카오|네이버|"
+        r"애플|apple|구글|google|메타|meta|아마존|amazon|마이크로소프트|microsoft|ms|"
         r"테슬라|tesla|알파벳|alphabet|엔비디아|nvidia|"
         r"빅테크|틱톡|tiktok|유튜브|youtube|페이스북|facebook|클라우드|aws|애저",
         t
     ):
-        return "빅테크"
+        cats.append("빅테크")
 
-    # 암호화폐·에너지: 코인 + 유가
     if re.search(r"비트코인|bitcoin|이더리움|ethereum|코인|암호화폐|블록체인|crypto|"
                  r"유가|원유|wti|브렌트|brent|석유|오일|천연가스|lng|에너지", t):
-        return "코인·에너지"
+        cats.append("코인·에너지")
 
-    return None  # IT 무관 → 표시 안 함
+    # 위 카테고리 어디도 안 걸렸지만 IT 관련이면 기타IT로 (전체탭에서 보이게)
+    if not cats:
+        if re.search(r"it|tech|테크|소프트웨어|앱|플랫폼|스타트업|디지털|사이버|ipo|스페이스x|드론|로봇|자율주행|핀테크|토스|카카오뱅크|게임|엔씨|넥슨|크래프톤", t):
+            cats.append("기타IT")
+
+    return cats
 
 # ── 뉴스 ─────────────────────────────────────────────────────────────
 @st.cache_data(ttl=120)
@@ -206,16 +209,18 @@ def fetch_news():
                 continue
             seen.add(link)
 
-            cat = detect_cat(title)
-            if cat is None:
-                continue  # IT 무관 뉴스 제외
+            cats = detect_cats(title)
+            if not cats:
+                continue
 
-            data.append({
-                "title":    title,
-                "url":      link,
-                "category": cat,
-                "time":     time_ago(d.group(1) if d else "")
-            })
+            # 카테고리별 중복 허용 - 각각 별도 항목으로 추가
+            for cat in cats:
+                data.append({
+                    "title":    title,
+                    "url":      link,
+                    "category": cat,
+                    "time":     time_ago(d.group(1) if d else "")
+                })
 
     return data
 
