@@ -28,7 +28,7 @@ def time_ago(pub_date):
     except:
         return ""
 
-# 🔥 🇰🇷 KRX API (코스피/코스닥)
+# 🔥 🇰🇷 KRX (코스피/코스닥)
 def fetch_korea_index():
     try:
         url = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd"
@@ -38,27 +38,23 @@ def fetch_korea_index():
             "Referer": "http://data.krx.co.kr"
         }
 
-        # 코스피
-        kospi_data = {
+        data = {
             "bld": "dbms/MDC/STAT/standard/MDCSTAT00301",
             "locale": "ko_KR",
-            "idxIndMidclssCd": "01",  # 코스피
-            "trdDd": "20240301"
+            "trdDd": datetime.now().strftime("%Y%m%d")
         }
 
-        # 코스닥
-        kosdaq_data = {
-            "bld": "dbms/MDC/STAT/standard/MDCSTAT00301",
-            "locale": "ko_KR",
-            "idxIndMidclssCd": "02",  # 코스닥
-            "trdDd": "20240301"
-        }
+        res = requests.post(url, data=data, headers=headers).json()
 
-        kospi_res = requests.post(url, data=kospi_data, headers=headers).json()
-        kosdaq_res = requests.post(url, data=kosdaq_data, headers=headers).json()
+        kospi = 0
+        kosdaq = 0
 
-        kospi = float(kospi_res["output"][0]["FLUC_RT"])
-        kosdaq = float(kosdaq_res["output"][0]["FLUC_RT"])
+        for item in res.get("output", []):
+            name = item.get("IDX_NM", "")
+            if "코스피" in name:
+                kospi = float(item["FLUC_RT"])
+            elif "코스닥" in name:
+                kosdaq = float(item["FLUC_RT"])
 
         return kospi, kosdaq
 
@@ -66,15 +62,7 @@ def fetch_korea_index():
         print("KRX 오류:", e)
         return 0, 0
 
-# 🔥 환율 (안정 API)
-def fetch_usd():
-    try:
-        res = requests.get("https://api.exchangerate.host/latest?base=USD&symbols=KRW").json()
-        return 0  # 환율은 % 계산 어려워서 0 유지 (원하면 계산 가능)
-    except:
-        return 0
-
-# 🔥 해외 지수
+# 🔥 🌍 해외 지수
 def fetch_global(symbol):
     try:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=2d"
@@ -93,10 +81,24 @@ def fetch_indices():
     return {
         "KOSPI": kospi,
         "KOSDAQ": kosdaq,
-        "USD/KRW": fetch_usd(),
         "S&P500": fetch_global("^GSPC"),
         "RUSSELL": fetch_global("^RUT")
     }
+
+# 🔥 카테고리
+def detect_cat(title):
+    t = title.lower()
+
+    if re.search(r"ai|gpt|llm|반도체|칩|엔비디아|하이닉스", t):
+        return "AI"
+
+    if re.search(r"비트코인|코인|암호화폐", t):
+        return "암호화폐"
+
+    if re.search(r"코스피|코스닥|환율|경제|나스닥|금리|시장", t):
+        return "증시"
+
+    return "기타"
 
 # 🔥 뉴스
 def fetch_news():
@@ -105,44 +107,87 @@ def fetch_news():
         "https://kr.investing.com/rss/news_285.rss",
         "https://kr.investing.com/rss/news_1.rss"
     ]
+
     data=[]; seen=set()
+
     for u in urls:
         xml=requests.get(u).text
         items=re.findall(r"<item>(.*?)</item>", xml, re.DOTALL)
+
         for it in items:
             t=re.search(r"<title>(.*?)</title>",it)
             l=re.search(r"<link>(.*?)</link>",it)
             d=re.search(r"<pubDate>(.*?)</pubDate>",it)
+
             if not t or not l: continue
+
             title=re.sub(r"<!\[CDATA\[|\]\]>","",t.group(1))
             link=l.group(1)
+
             if link in seen: continue
             seen.add(link)
+
             data.append({
                 "title":title,
                 "url":link,
+                "category":detect_cat(title),
                 "time":time_ago(d.group(1) if d else "")
             })
+
             if len(data)>=60: break
+
     return data
 
-# 🔥 UI
+# 🔥 사이드바
 st.sidebar.title("📊 주요 지수")
 
-indices=fetch_indices()
+indices = fetch_indices()
 
 for k,v in indices.items():
     cls="up" if v>=0 else "down"
-    st.sidebar.markdown(f"<div class='{cls}'>{k} {v:.2f}%</div>", unsafe_allow_html=True)
+    st.sidebar.markdown(
+        f"<div class='{cls}'>{k} {v:.2f}%</div>",
+        unsafe_allow_html=True
+    )
 
+# 🔥 메인 UI
 st.title("📰 IT PULSE")
 
-data=fetch_news()
+col1,col2=st.columns([1,1])
 
-for a in data[:20]:
-    st.markdown(f"""
-    <div class="card">
-    <div class="title"><a href="{a['url']}" target="_blank">{a['title']}</a></div>
-    <div class="meta">{a['time']}</div>
-    </div>
-    """, unsafe_allow_html=True)
+with col1:
+    refresh=st.selectbox("자동 새로고침",["없음","1분","3분","5분"])
+
+with col2:
+    if st.button("🔄 새로고침"):
+        st.session_state["r"]=True
+
+# 🔥 데이터 로드
+if "data" not in st.session_state or st.session_state.get("r"):
+    st.session_state["data"]=fetch_news()
+    st.session_state["r"]=False
+
+data=st.session_state["data"]
+
+# 🔥 탭
+tab1,tab2,tab3=st.tabs(["전체","AI","증시"])
+
+def render(cat=None):
+    for a in data:
+        if cat and a["category"]!=cat: continue
+
+        st.markdown(f"""
+        <div class="card">
+        <div class="title"><a href="{a['url']}" target="_blank">{a['title']}</a></div>
+        <div class="meta">{a['category']} · {a['time']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+with tab1: render()
+with tab2: render("AI")
+with tab3: render("증시")
+
+# 🔥 자동 새로고침
+if refresh!="없음":
+    time.sleep({"1분":60,"3분":180,"5분":300}[refresh])
+    st.rerun()
