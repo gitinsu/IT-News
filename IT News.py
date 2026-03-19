@@ -28,37 +28,54 @@ def time_ago(pub_date):
     except:
         return ""
 
-# 🔥 핵심: Yahoo 지수 (코스피/코스닥)
-def fetch_korea_index():
-    headers = {"User-Agent": "Mozilla/5.0"}
-
+# 🔥 Yahoo quote (핵심)
+def fetch_quote(symbol):
     try:
-        def get_change(symbol):
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=2d"
-            res = requests.get(url, headers=headers, timeout=5).json()
+        url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbol}"
+        res = requests.get(url, headers={"User-Agent":"Mozilla/5.0"}, timeout=5).json()
+        data = res.get("quoteResponse", {}).get("result", [])
+        if not data:
+            return 0
+        return data[0].get("regularMarketChangePercent", 0)
+    except:
+        return 0
 
-            result = res.get("chart", {}).get("result")
-            if not result:
-                return 0
+# 🔥 한국 지수
+def fetch_korea_index():
+    kospi = fetch_quote("^KS11")
+    kosdaq = fetch_quote("^KQ11")
+    return kospi, kosdaq
 
-            closes = result[0]["indicators"]["quote"][0]["close"]
-            closes = [c for c in closes if c]
+# 🔥 🔥 미국 지수 (안정 버전)
+def fetch_us_index():
+    try:
+        url = "https://query1.finance.yahoo.com/v7/finance/quote?symbols=^GSPC,^RUT"
+        res = requests.get(url, headers={"User-Agent":"Mozilla/5.0"}, timeout=5).json()
 
-            if len(closes) < 2:
-                return 0
+        data = res.get("quoteResponse", {}).get("result", [])
 
-            return ((closes[-1] - closes[-2]) / closes[-2]) * 100
+        sp = russell = 0
 
-        kospi = get_change("^KS11")
-        kosdaq = get_change("^KQ11")
+        for item in data:
+            symbol = item.get("symbol")
 
-        return kospi, kosdaq
+            if symbol == "^GSPC":
+                sp = item.get("regularMarketChangePercent", 0)
 
-    except Exception as e:
-        print("Yahoo 오류:", e)
+            elif symbol == "^RUT":
+                russell = item.get("regularMarketChangePercent", 0)
+
+        # 🔥 fallback (혹시라도 실패하면 재시도)
+        if sp == 0 and russell == 0:
+            time.sleep(1)
+            return fetch_us_index()
+
+        return sp, russell
+
+    except:
         return 0, 0
 
-# 🔥 환율 (안정)
+# 🔥 환율 (그대로 유지)
 def fetch_usd():
     try:
         res = requests.get("https://open.er-api.com/v6/latest/USD", timeout=5).json()
@@ -66,31 +83,18 @@ def fetch_usd():
     except:
         return 0
 
-# 🔥 해외 지수
-def fetch_global(symbol):
-    try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=2d"
-        res = requests.get(url, headers=headers, timeout=5).json()
-
-        closes = res["chart"]["result"][0]["indicators"]["quote"][0]["close"]
-        closes = [c for c in closes if c]
-
-        return ((closes[-1]-closes[-2])/closes[-2])*100
-    except:
-        return 0
-
-# 🔥 지수 통합
+# 🔥 통합
 def fetch_indices():
     kospi, kosdaq = fetch_korea_index()
+    sp, russell = fetch_us_index()
     usd = fetch_usd()
 
     return {
         "KOSPI": kospi,
         "KOSDAQ": kosdaq,
         "USD/KRW": usd,
-        "S&P500": fetch_global("^GSPC"),
-        "RUSSELL": fetch_global("^RUT")
+        "S&P500": sp,
+        "RUSSELL": russell
     }
 
 # 🔥 카테고리
@@ -158,7 +162,7 @@ for k,v in indices.items():
         cls="up" if v>=0 else "down"
         st.sidebar.markdown(f"<div class='{cls}'>{k} {v:.2f}%</div>", unsafe_allow_html=True)
 
-# 🔥 메인 UI
+# 🔥 메인
 st.title("📰 IT PULSE")
 
 col1,col2=st.columns([1,1])
@@ -193,6 +197,7 @@ with tab1: render()
 with tab2: render("AI")
 with tab3: render("증시")
 
+# 🔥 자동 새로고침
 if refresh!="없음":
     time.sleep({"1분":60,"3분":180,"5분":300}[refresh])
     st.rerun()
