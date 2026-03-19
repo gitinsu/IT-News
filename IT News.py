@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 st.set_page_config(page_title="IT PULSE", layout="wide")
 
-# 🔥 스타일 (깜빡임 + 색상)
+# 🎨 스타일
 st.markdown("""
 <style>
 .card {
@@ -50,7 +50,6 @@ def time_ago(pub_date):
     try:
         dt = datetime.strptime(pub_date, "%a, %d %b %Y %H:%M:%S %z")
         now = datetime.now(timezone.utc)
-
         diff = now - dt
         minutes = int(diff.total_seconds() / 60)
 
@@ -64,7 +63,7 @@ def time_ago(pub_date):
         return ""
 
 
-# 🔥 지수 가져오기 (Yahoo)
+# 🔥 지수 가져오기 (수정된 안정 버전)
 def fetch_indices():
     symbols = {
         "KOSPI": "^KS11",
@@ -80,21 +79,30 @@ def fetch_indices():
             url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
             res = requests.get(url).json()
 
-            data = res["chart"]["result"][0]["meta"]
+            result = res["chart"]["result"][0]
 
-            current = data["regularMarketPrice"]
-            prev = data["chartPreviousClose"]
+            closes = result["indicators"]["quote"][0]["close"]
+            closes = [c for c in closes if c is not None]
+
+            if len(closes) < 2:
+                results[name] = 0
+                continue
+
+            current = closes[-1]
+            prev = closes[-2]
 
             change_pct = ((current - prev) / prev) * 100
 
             results[name] = change_pct
-        except:
+
+        except Exception as e:
+            print(e)
             results[name] = 0
 
     return results
 
 
-# 🔥 뉴스 카테고리
+# 🔥 카테고리
 def detect_cat(title):
     t = title.lower()
 
@@ -156,7 +164,7 @@ def fetch_news():
     return all_articles
 
 
-# 🔥 사이드바 지수 표시
+# 🔥 사이드바 지수
 st.sidebar.title("📊 주요 지수")
 
 indices = fetch_indices()
