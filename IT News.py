@@ -28,43 +28,50 @@ def time_ago(pub_date):
     except:
         return ""
 
-# 🔥 🔥 핵심: Daum API
-def fetch_daum_market():
+# 🔥 핵심: Yahoo 지수 (코스피/코스닥)
+def fetch_korea_index():
+    headers = {"User-Agent": "Mozilla/5.0"}
+
     try:
-        url = "https://finance.daum.net/api/market_index"
+        def get_change(symbol):
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=2d"
+            res = requests.get(url, headers=headers, timeout=5).json()
 
-        headers = {
-            "User-Agent": "Mozilla/5.0",
-            "Referer": "https://finance.daum.net/domestic"
-        }
+            result = res.get("chart", {}).get("result")
+            if not result:
+                return 0
 
-        res = requests.get(url, headers=headers).json()
+            closes = result[0]["indicators"]["quote"][0]["close"]
+            closes = [c for c in closes if c]
 
-        kospi = kosdaq = usd = 0
+            if len(closes) < 2:
+                return 0
 
-        for item in res["data"]:
-            name = item["name"]
+            return ((closes[-1] - closes[-2]) / closes[-2]) * 100
 
-            if name == "코스피":
-                kospi = float(item["changeRate"])
+        kospi = get_change("^KS11")
+        kosdaq = get_change("^KQ11")
 
-            elif name == "코스닥":
-                kosdaq = float(item["changeRate"])
-
-            elif "USD/KRW" in name:
-                usd = float(item["tradePrice"])
-
-        return kospi, kosdaq, usd
+        return kospi, kosdaq
 
     except Exception as e:
-        print("Daum 오류:", e)
-        return 0, 0, 0
+        print("Yahoo 오류:", e)
+        return 0, 0
+
+# 🔥 환율 (안정)
+def fetch_usd():
+    try:
+        res = requests.get("https://open.er-api.com/v6/latest/USD", timeout=5).json()
+        return res["rates"]["KRW"]
+    except:
+        return 0
 
 # 🔥 해외 지수
 def fetch_global(symbol):
     try:
+        headers = {"User-Agent": "Mozilla/5.0"}
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=2d"
-        res = requests.get(url, headers={"User-Agent":"Mozilla/5.0"}).json()
+        res = requests.get(url, headers=headers, timeout=5).json()
 
         closes = res["chart"]["result"][0]["indicators"]["quote"][0]["close"]
         closes = [c for c in closes if c]
@@ -75,7 +82,8 @@ def fetch_global(symbol):
 
 # 🔥 지수 통합
 def fetch_indices():
-    kospi, kosdaq, usd = fetch_daum_market()
+    kospi, kosdaq = fetch_korea_index()
+    usd = fetch_usd()
 
     return {
         "KOSPI": kospi,
@@ -145,16 +153,10 @@ indices = fetch_indices()
 
 for k,v in indices.items():
     if k == "USD/KRW":
-        st.sidebar.markdown(
-            f"<div class='meta'>{k} {v:,.2f}</div>",
-            unsafe_allow_html=True
-        )
+        st.sidebar.markdown(f"<div class='meta'>{k} {v:,.2f}</div>", unsafe_allow_html=True)
     else:
         cls="up" if v>=0 else "down"
-        st.sidebar.markdown(
-            f"<div class='{cls}'>{k} {v:.2f}%</div>",
-            unsafe_allow_html=True
-        )
+        st.sidebar.markdown(f"<div class='{cls}'>{k} {v:.2f}%</div>", unsafe_allow_html=True)
 
 # 🔥 메인 UI
 st.title("📰 IT PULSE")
@@ -168,14 +170,12 @@ with col2:
     if st.button("🔄 새로고침"):
         st.session_state["r"]=True
 
-# 🔥 데이터 로드
 if "data" not in st.session_state or st.session_state.get("r"):
     st.session_state["data"]=fetch_news()
     st.session_state["r"]=False
 
 data=st.session_state["data"]
 
-# 🔥 탭
 tab1,tab2,tab3=st.tabs(["전체","AI","증시"])
 
 def render(cat=None):
@@ -193,7 +193,6 @@ with tab1: render()
 with tab2: render("AI")
 with tab3: render("증시")
 
-# 🔥 자동 새로고침
 if refresh!="없음":
     time.sleep({"1분":60,"3분":180,"5분":300}[refresh])
     st.rerun()
