@@ -61,46 +61,62 @@ def time_ago(pub_date):
         return ""
 
 
-# 🔥 안정적인 지수 (Yahoo + fallback)
-def fetch_indices():
-    symbols = {
-        "KOSPI": "^KS11",
-        "KOSDAQ": "^KQ11",
-        "S&P500": "^GSPC",
-        "RUSSELL": "^RUT"
-    }
-
+# 🔥 🇰🇷 네이버 금융 (코스피/코스닥 해결)
+def fetch_korea_index():
     headers = {"User-Agent": "Mozilla/5.0"}
-    results = {}
 
-    for name, symbol in symbols.items():
-        try:
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=2d"
-            res = requests.get(url, headers=headers, timeout=5).json()
+    kospi = 0
+    kosdaq = 0
 
-            result = res.get("chart", {}).get("result")
+    try:
+        url = "https://polling.finance.naver.com/api/realtime"
+        res = requests.get(url, headers=headers).json()
 
-            if not result:
-                results[name] = "-"
-                continue
+        for item in res["result"]["areas"][0]["datas"]:
+            if item["code"] == "KOSPI":
+                kospi = float(item["nv"]) - float(item["cv"])
+                kospi = (kospi / float(item["cv"])) * 100
 
-            closes = result[0]["indicators"]["quote"][0]["close"]
-            closes = [c for c in closes if c is not None]
+            elif item["code"] == "KOSDAQ":
+                kosdaq = float(item["nv"]) - float(item["cv"])
+                kosdaq = (kosdaq / float(item["cv"])) * 100
 
-            if len(closes) < 2:
-                results[name] = "-"
-                continue
+    except Exception as e:
+        print("네이버 오류:", e)
 
-            prev = closes[-2]
-            current = closes[-1]
+    return kospi, kosdaq
 
-            change_pct = ((current - prev) / prev) * 100
-            results[name] = change_pct
 
-        except:
-            results[name] = "-"
+# 🔥 🌍 해외 (Yahoo)
+def fetch_global_index(symbol):
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=2d"
+        res = requests.get(url, headers=headers).json()
 
-    return results
+        result = res["chart"]["result"][0]
+        closes = result["indicators"]["quote"][0]["close"]
+        closes = [c for c in closes if c is not None]
+
+        prev = closes[-2]
+        current = closes[-1]
+
+        return ((current - prev) / prev) * 100
+
+    except:
+        return 0
+
+
+# 🔥 지수 통합 (완전 안정)
+def fetch_indices():
+    kospi, kosdaq = fetch_korea_index()
+
+    return {
+        "KOSPI": kospi,
+        "KOSDAQ": kosdaq,
+        "S&P500": fetch_global_index("^GSPC"),
+        "RUSSELL": fetch_global_index("^RUT")
+    }
 
 
 # 🔥 카테고리
@@ -119,7 +135,7 @@ def detect_cat(title):
     return "기타"
 
 
-# 🔥 뉴스 가져오기
+# 🔥 뉴스
 def fetch_news():
     urls = [
         "https://kr.investing.com/rss/news_25.rss",
@@ -131,39 +147,36 @@ def fetch_news():
     seen = set()
 
     for url in urls:
-        try:
-            res = requests.get(url, timeout=5)
-            xml = res.text
+        res = requests.get(url)
+        xml = res.text
 
-            items = re.findall(r"<item>(.*?)</item>", xml, re.DOTALL)
+        items = re.findall(r"<item>(.*?)</item>", xml, re.DOTALL)
 
-            for item in items:
-                title_match = re.search(r"<title>(.*?)</title>", item)
-                link_match = re.search(r"<link>(.*?)</link>", item)
-                date_match = re.search(r"<pubDate>(.*?)</pubDate>", item)
+        for item in items:
+            title_match = re.search(r"<title>(.*?)</title>", item)
+            link_match = re.search(r"<link>(.*?)</link>", item)
+            date_match = re.search(r"<pubDate>(.*?)</pubDate>", item)
 
-                if not title_match or not link_match:
-                    continue
+            if not title_match or not link_match:
+                continue
 
-                title = re.sub(r"<!\[CDATA\[|\]\]>", "", title_match.group(1)).strip()
-                link = link_match.group(1)
-                pub_date = date_match.group(1) if date_match else ""
+            title = re.sub(r"<!\[CDATA\[|\]\]>", "", title_match.group(1)).strip()
+            link = link_match.group(1)
+            pub_date = date_match.group(1) if date_match else ""
 
-                if link in seen:
-                    continue
-                seen.add(link)
+            if link in seen:
+                continue
+            seen.add(link)
 
-                all_articles.append({
-                    "title": title,
-                    "url": link,
-                    "category": detect_cat(title),
-                    "time": time_ago(pub_date)
-                })
+            all_articles.append({
+                "title": title,
+                "url": link,
+                "category": detect_cat(title),
+                "time": time_ago(pub_date)
+            })
 
-                if len(all_articles) >= 60:
-                    break
-        except:
-            continue
+            if len(all_articles) >= 60:
+                break
 
     return all_articles
 
@@ -174,14 +187,11 @@ st.sidebar.title("📊 주요 지수")
 indices = fetch_indices()
 
 for name, val in indices.items():
-    if val == "-":
-        st.sidebar.markdown(f"{name} 데이터 없음")
-    else:
-        cls = "up" if val >= 0 else "down"
-        st.sidebar.markdown(
-            f"<div class='{cls}'>{name} {val:.2f}%</div>",
-            unsafe_allow_html=True
-        )
+    cls = "up" if val >= 0 else "down"
+    st.sidebar.markdown(
+        f"<div class='{cls}'>{name} {val:.2f}%</div>",
+        unsafe_allow_html=True
+    )
 
 
 # 🔥 메인
